@@ -1,8 +1,11 @@
 package com.taohansen.dscatalog.services;
 
 import com.taohansen.dscatalog.dto.CategoryDTO;
+import com.taohansen.dscatalog.dto.ProductDTO;
 import com.taohansen.dscatalog.entities.Category;
+import com.taohansen.dscatalog.entities.Product;
 import com.taohansen.dscatalog.repositories.CategoryRepository;
+import com.taohansen.dscatalog.repositories.ProductRepository;
 import com.taohansen.dscatalog.services.exceptions.DatabaseException;
 import com.taohansen.dscatalog.services.exceptions.ResourceNotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,44 +17,45 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import javax.persistence.EntityNotFoundException;
-import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 @Service
-public class CategoryService {
+public class ProductService {
 
     @Autowired
-    private CategoryRepository repository;
+    private ProductRepository repository;
+
+    @Autowired
+    private CategoryRepository categoryRepository;
 
     @Transactional(readOnly = true)
-    public Page<CategoryDTO> findAllPaged(PageRequest pageRequest) {
-        Page<Category> list = repository.findAll(pageRequest);
-        return list.map(CategoryDTO::new);
+    public Page<ProductDTO> findAllPaged(PageRequest pageRequest) {
+        Page<Product> list = repository.findAll(pageRequest);
+        return list.map(ProductDTO::new);
     }
 
     @Transactional(readOnly = true)
-    public CategoryDTO findById(Long id) {
-        Optional<Category> obj = repository.findById(id);
-        Category entity = obj.orElseThrow(() -> new ResourceNotFoundException("Entity not found"));
-        return new CategoryDTO(entity);
+    public ProductDTO findById(Long id) {
+        Optional<Product> obj = repository.findById(id);
+        Product entity = obj.orElseThrow(() -> new ResourceNotFoundException("Entity not found"));
+        return new ProductDTO(entity, entity.getCategories());
     }
 
     @Transactional
-    public CategoryDTO insert(CategoryDTO dto) {
-        Category entity = new Category();
-        entity.setName(dto.getName());
+    public ProductDTO insert(ProductDTO dto) {
+        Product entity = new Product();
+        copyDtoToEntity(dto, entity);
         entity = repository.save(entity);
-        return new CategoryDTO(entity);
+        return new ProductDTO(entity);
     }
 
     @Transactional
-    public CategoryDTO update(Long id, CategoryDTO dto) {
+    public ProductDTO update(Long id, ProductDTO dto) {
         try {
-            Category entity = repository.getOne(id);
-            entity.setName(dto.getName());
+            Product entity = repository.getOne(id);
+            copyDtoToEntity(dto, entity);
             entity = repository.save(entity);
-            return new CategoryDTO(entity);
+            return new ProductDTO(entity);
         } catch (EntityNotFoundException e) {
             throw new ResourceNotFoundException("Id not found to update");
         }
@@ -60,13 +64,24 @@ public class CategoryService {
     public void delete(Long id) {
         try {
             repository.deleteById(id);
-        }
-        catch (EmptyResultDataAccessException e) {
+        } catch (EmptyResultDataAccessException e) {
             throw new ResourceNotFoundException("Id not found to delete");
-        }
-        catch (DataIntegrityViolationException e) {
+        } catch (DataIntegrityViolationException e) {
             throw new DatabaseException("Integrity database violation");
         }
+    }
 
+    private void copyDtoToEntity(ProductDTO dto, Product entity) {
+        entity.setName(dto.getName());
+        entity.setDescription(dto.getDescription());
+        entity.setDate(dto.getDate());
+        entity.setImgUrl(dto.getImgUrl());
+        entity.setPrice(dto.getPrice());
+
+        entity.getCategories().clear();
+        for (CategoryDTO catDto : dto.getCategories()) {
+            Category category = categoryRepository.getOne(catDto.getId());
+            entity.getCategories().add(category);
+        }
     }
 }
